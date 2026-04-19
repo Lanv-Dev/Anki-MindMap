@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title></title>
+</head>
+
+<body>
+  <script>
+// O problema do meu códico é que gera vários nodes e text nodes vazios, o que não acontece com execCommand, darai para usar insertData, mas ele só aceita text nodes. Mas tá funcional, então esse é o plano B se execCommand não funcionar mais.
+function toop() {
+    console.clear();
+    document.getElementById("n1").childNodes.forEach((node, index) => {
+    console.log(
+        index,
+        "nodeName:", node.nodeName,
+        "nodeType:", node.nodeType,
+        "textContent:", JSON.stringify(node.textContent)
+    );
+});
+}
+  
+// fix div enter
+domC.addEventListener("beforeinput", (e) => {
+    if (e.inputType === "insertParagraph") {
+        e.preventDefault();
+        const selection = globalThis.getSelection();
+        const range = selection.getRangeAt(0);
+        const tempRange = document.createRange(); // Range para medir quanto falta até o final da div.
+        tempRange.selectNodeContents(e.target); // Nunca colapsa pois pegar um Element node, que envolve além do text node, suas tags.
+        tempRange.setStart(selection.focusNode, selection.focusOffset);
+        
+        // Resolve colapso de altura quando há apenas 1 quebra de linha no final da div
+        const textNode = document.createTextNode(!tempRange.toString() && !e.target.innerHTML.endsWith("<br>") && !e.target.innerHTML.endsWith("\n") ? "\n\n" : "\n" );
+        
+        range.deleteContents(); // Apaga conteúdo selecionado, se houver
+        
+        range.insertNode(textNode);
+        
+        // Move o cursor para depois do \n
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        
+        // Atualizar a seleção
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+}, { passive: false });
+// Padrão natural da div contenteditable:
+// • Enter gera uma div, logo deve ser alterado.
+// • Ao apagar todo o texto de uma line block, ele insere um <br> com um text node vazio no final para deixar a linha visível.
+// • Ao escrever na linha sem texto, ele apaga o <br> que deixava ela visível.
+// • 1 <br> ou \n não é suficiente para quebrar de fato a linha no fim da div, pois como não há dígitos após eles, a quebra de linha é desconsiderada, não dá para ajeitar via css ainda. A saída é usar duas <br> ou \n.
+// • O backspace apaga o <br> responsável pela quebra da linha que foi apagada, não o 2ª <br> que é um dígito coringa para tornar a quebra de linha possível, o 2ª <br> continua lá.
+// • Problem: Ao apagar o texto de uma linha fazendo o navegador criar um <br>, cada dupla de \n se torna visível, pois há 3 quebras de linha contando com o <br>.
+// • Outro problema é o seguinte, o 2ª \n usando para tornar o 1ª visível, acaba se tornando visível também ao adicionar outra dupla de \n, pulando mais linhas do que deveria.
+// interessante: node.normalize() junta text nodes adjacentes.
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<body>
+
+<!--Aviso-->
+<div id="aviso" style="position:absolute; left: 5px; bottom: 5px; z-index: 3; width: 50vw; height: 30vh; white-space: pre-wrap; color: green; font-size: 11px; overflow-y: auto; touch-action: pan-y; text-align: initial;"></div>
+
+<!--See-->
+<button onclick="See()">See</button>
+<div id="o" contenteditable="true"><span>origem</span></div>
+<div id="d">destino</div>
+
+<script>
+// Aviso
+function aviso(...mensagens) {
+  const avisoBox = document.getElementById("aviso");
+  avisoBox.textContent += (avisoBox.textContent ? "\n" : "") + mensagens.join(" ");
+  avisoBox.scrollTop = avisoBox.scrollHeight;
+}
+
+aviso.clear = function() {
+  document.getElementById("aviso").textContent = "";
+};
+aviso("teste")
+
+//See
+function See() {
+  const origem = document.getElementById("o");
+  const destino = document.getElementById("d");
+  const htmlDaOrigem = origem.innerHTML;
+  destino.textContent = htmlDaOrigem;
+}
+
+</script>
+
+</body>
+</html>

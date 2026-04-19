@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <style>
+   :root {
+       margin: 0;
+       overflow: hidden;
+   }
+   body {
+       margin: 0;
+       overflow: hidden;
+       touch-action: none;
+   }
+   #qa {
+       margin: 0;
+   }
+   #s {
+       position: absolute;
+       top: 0;
+       left: 0;
+       height: 100vh;
+       width: 100vw;
+       overflow: hidden;
+       touch-action: none;
+   }
+   #s:focus-within {
+       height: calc(100vh - 38px);
+   }
+   #c {
+       position: relative;
+       top: 0;
+       left: 0;
+       transform-origin: 0 0;
+   }
+   .n {
+       position: absolute;
+       top: 0;
+       left: 0;
+       width: max-content;
+       min-width: 15px;
+       max-width: 400px;
+       min-height: 30px;
+       text-align: justify;
+       white-space: pre-wrap; /* If spaces collapse, use break-spaces */
+       border-bottom: 4px solid transparent; /*The border thickness (px) must always be the same*/
+   }
+   .cloze-inactive {
+       color: color-mix(in oklch, currentColor 30%, yellow);
+   }
+   #lines {
+       position: absolute;
+       top: 0;
+       left: 0;
+       width: 20px;
+       height: 20px;
+       overflow: visible;
+       pointer-events: none;
+   }
+   #m {
+       display: none;
+       position: absolute;
+       bottom: 0;
+       left: 0;
+       z-index: 2;
+       width: 100vw;
+       height: 38px;
+       border: 1px solid gray;
+       box-sizing: border-box;
+   }
+   .b1 {
+       position: absolute;
+       top: 0;
+       width: 38px;
+       height: inherit;
+       padding: 0;
+       border: transparent;
+       color: currentColor;
+       background-color: transparent;
+       border-right: 1px solid currentColor;
+       user-select: none;
+       font-size: 23px;
+       box-sizing: border-box;
+   }
+   .b {
+       user-select: none;
+       color: white;
+       background-color: black;
+       border: 1px solid gray;
+   }
+   </style>
+   
+</head>
+
+<body>
+    <div id="m">
+        <button class="b1" onclick="Cloze('new')" style="left: 0px;">[.+]</button>
+        <button class="b1" onclick="Cloze()" style="left: 38px;">[...]</button>
+        <button class="b1" onclick="Move(varF)" style="left: 76px;">⬆</button>
+        <button class="b1" onclick="Move(varF, 'down')" style="left: 114px;">⬇</button>
+        <button class="b1" onclick="Move(varLF, 'move', varF)" style="left: 152px;">M</button>
+        <button class="b1" onclick="InputMarkDown(varF)" style="left: 190px;">#</button>
+        <button class="b1" onclick="Add(varF, 'below')" style="right: 38px; border-left: 1px solid gray;">➣</button>
+        <button class="b1" onclick="Add(varF)" style="right: 0;">➤</button>
+    </div>
+<button class="b" onclick="OutputFront()" style="position: absolute; z-index: 2; top: 2px; right: 2px;">save</button>
+<div id="front" style="display:none;">
+Neuro@%Gastro@%Diagnóstico@1%Síndrome@1%Tônus@3%Trofismo@3%Extrapiramidal@4%Neurônio Motor@4%Motora@4%1
+</div>
+<div id="s">
+    <div id="c"></div>
+</div>
+
+<script id="script1">
+const domS = document.getElementById("s"); // Element that has scroll
+const domC = document.getElementById("c"); // Container with nodes
+const domM = document.getElementById("m"); // Bottom menu
+// In the Map objects, the ID numbers are stored without the 'n' prefix
+const mapF = new Map(); // fathers map
+const mapC = new Map(); // Children map
+const mapW = new Map(); // Node width
+const mapH = new Map(); // Node height
+const mapX = new Map(); // X coordinates
+const mapY = new Map(); // Y coordinates
+const varT = 25; // Transverse spacing
+const varV = 20; // Vertical spacing
+const varC = 20; // This defines the control point of the cubic curve
+let varB; // Indicates if the mind map is bidirectional
+let varN = 0; // Number of the last created node
+let varF; // Focused node number
+let varLF; // Number of the penultimate focused node
+let varCard; // current card number
+let varCardMax = 0; // last card number
+let translateX = 0;
+let translateY = 0;
+let scale = 1;
+
+function Background() {
+    let node = domS.parentElement;
+    let color = null;
+    while (node) {
+        const style = globalThis.getComputedStyle(node).backgroundColor;
+        if (style !== "rgba(0, 0, 0, 0)") {
+            color = style;
+            break;
+        }
+        node = node.parentElement;
+    }
+    const final = color || "white";
+    const el = document.createElement("style");
+    el.textContent = `.n { background-color: ${final}; }`;
+    document.body.prepend(el);
+}
+
+function InputFront() {
+    const rawText = document.getElementById("front").innerHTML.trim().replace(/<br>/g, "\n");
+    const parts = rawText.split(/(?<=@(?:\d+)?%)/);
+    if (parts.length > 1) {
+        varB = Number(parts.pop());
+    } else {
+        varB = 0;
+    }
+    for (let i = 0; i < parts.length; i++) {
+        const match = parts[i].match(/(.*)@(\d*)%$/s);
+        const textRaw = match?.[1] ?? parts[i];
+        const parentStr = match?.[2];
+        const parent = parentStr ? Number(parentStr) : 0;
+        const text = textRaw.replace(/@e/g, "@");
+        const div = document.createElement("div");
+        varN++;
+        div.id = "n" + varN;
+        div.className = "n";
+        div.innerHTML = text;
+        div.contentEditable = "true";
+        domC.appendChild(div);
+        mapF.set(varN, parent);
+        if (!mapC.has(parent)) {
+            mapC.set(parent, []);
+        }
+        if (!mapC.has(varN)) {
+            mapC.set(varN, []);
+        }
+        mapC.get(parent).push(varN);
+    }
+}
+
+function Render() {
+    
+    mapH.clear();
+    mapW.clear();
+    mapX.clear();
+    mapY.clear();
+    let mapR = new Map(); // Children of the main nodes that will be on the right
+    let mapL = new Map(); // Children of the main nodes that will be on the left
+    let arrR = []; // Total of mapR
+    let arrL = []; // Total of mapL
+    let mapS = new Map(); // Sume of heights
+    let setS = new Set(); // queue for mapS BFS
+    let arrX = []; // queue for mapX BFS
+    let arrY = []; // queue for mapY BFS
+    let arrW = []; // used to calculate the width of the container
+    const colors = ["orange", "green", "rebeccapurple", "crimson", "royalblue", "maroon", "salmon", "teal", "fuchsia"]; // used to define the color of lines and borders
+
+    // find W, H, M and X for main nodes and start S
+    for (let [id, f] of mapF) {
+        const el = document.getElementById("n" + id);
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        const c = mapC.get(id);
+        mapH.set(id, h);
+        mapW.set(id, w);
+
+        if (f === 0) {
+            if (varB) {
+                mapX.set(id, - w / 2)
+            } else {
+                mapX.set(id, 0);
+            }
+        }
+        if (c.length === 0) {
+            mapS.set(id, h);
+            if (f !== 0) {
+                const b = mapC.get(f);
+                let n = true;
+                for (const j of b) {
+                    if (mapC.get(j).length > 0) {
+                        n = false;
+                        break;
+                    }
+                }
+                if (n) {
+                    setS.add(f);
+                }
+            }
+        }
+    }
+    
+    // find S
+    while (setS.size > 0) {
+        let newSetS = new Set();
+        for (let id of setS) {
+            const c = mapC.get(id);
+            let totalS = 0;
+            for (const j of c) {
+                totalS += mapS.get(j);
+            }
+            const S = totalS + (c.length - 1) * varV;
+            mapS.set(id, Math.max(S, mapH.get(id)));
+            const f = mapF.get(id);
+            if (f !== 0) {
+                newSetS.add(f);
+            }
+        }
+        setS = newSetS;
+    }
+    
+    // find R, L and S for main nodes
+    if (varB) {
+        for (let i = 0; i < mapC.get(0).length; i++) {
+            const m = mapC.get(0)[i];
+            const c = mapC.get(m)
+            const ceil = Math.ceil(c.length / 2);
+            const r = c.slice(0, ceil);
+            const l = c.slice(ceil);
+            mapR.set(m, r);
+            mapL.set(m, l);
+            arrR.push(...r);
+            arrL.push(...l);
+            
+            let sumR = (r.length - 1) * varV;
+            for (const n of r) {
+                sumR += mapS.get(n);
+            }
+            
+            let sumL = (l.length - 1) * varV;
+            for (const n of l) {
+                sumL += mapS.get(n);
+            }
+            const newS = Math.max(sumR, sumL, mapH.get(m));
+            mapS.set(m, newS)
+        }
+    }
+
+    // find Y for main nodes
+    for (let i = 0; i < mapC.get(0).length; i++) {
+        const m0 = mapC.get(0)[i - 1];
+        const m1 = mapC.get(0)[i];
+        const above = i === 0 ? 0 : mapY.get(m0) + (mapH.get(m0) + mapS.get(m0)) / 2 + varV;
+        mapY.set(m1, above + (mapS.get(m1) - mapH.get(m1)) / 2);
+    }
+    
+    // find X for secondary nodes
+    if (varB){
+        const arrD = [];
+        const q = [...arrL];
+        while (q.length) {
+            const id = q.shift();
+            const f = mapF.get(id);
+            const x = mapX.get(f) - varT - mapW.get(id);
+            mapX.set(id, x);
+            const c = mapC.get(id)
+            if (c.length === 0) {
+                arrD.push(x);
+            } else {
+                for (const v of c){
+                    q.push(v);
+                }
+            }
+        }
+        let minD = 0;
+        for (const v of arrD) {
+            if (v < minD) {
+                minD = v;
+            }
+        }
+        for (const [id, x] of mapX) {
+            mapX.set(id, x - 1 * minD);
+        }
+        arrX = [...arrR];
+    } else {
+        for (const m of mapC.get(0)) {
+            const c = mapC.get(m);
+            for (const id of c) {
+                arrX.push(id);
+            }
+        }
+    }
+    while (arrX.length) {
+        const id = arrX.shift();
+        const f = mapF.get(id);
+        const x = mapX.get(f) + mapW.get(f) + varT;
+        mapX.set(id, x);
+        const c = mapC.get(id);
+        if (c.length === 0) {
+            arrW.push(x + mapW.get(id));
+        } else {
+            for (const v of c) {
+                arrX.push(v);
+            }
+        }
+    }
+
+    // find Y for secondary nodes
+    if (varB) {
+        for (const m of mapC.get(0)) {
+            const fY = mapY.get(m);
+            const fH = mapH.get(m);
+            const c = mapC.get(m);
+            const r = mapR.get(m);
+            const l = mapL.get(m);
+            for (const v of c) {
+                const cH = mapH.get(v);
+                const cS = mapS.get(v);
+                const G = r.includes(v) ? r : l;
+                const idx = G.indexOf(v);
+                let sumAbove = 0
+                let above = 0
+                for (let j = idx + 1; j < G.length; j++) {
+                    sumAbove += mapS.get(G[j]);
+                    above++;
+                }
+                let sumG = 0;
+                for (let j = 0; j < G.length; j++) {
+                    sumG += mapS.get(G[j]);
+                }
+                mapY.set(v, fY + (fH + sumG + varV * (G.length -1) - cS - cH) / 2 - sumAbove - above * varV);
+                arrY.push(v);
+            }
+        }
+    } else {
+        arrY = [...mapC.get(0)]
+    }
+    while (arrY.length) {
+        const f = arrY.shift();
+        const c = mapC.get(f);
+        const fY = mapY.get(f);
+        const fH = mapH.get(f);
+        const fS = mapS.get(f);
+        for (let i = 0; i < c.length; i++) {
+            const id = c[i];
+            const cH = mapH.get(id);
+            const cS = mapS.get(id);
+            let sumAbove = 0;
+            let above = 0;
+            for (let j = i + 1; j < c.length; j++) {
+                sumAbove += mapS.get(c[j]);
+                above++;
+            }
+            mapY.set(id, fY + (fH + fS - cS - cH) / 2 - sumAbove -(above * varV));
+            arrY.push(id);
+        }
+    }
+
+    // Apply positions
+    for (const [id] of mapF) {
+        const el = document.getElementById("n" + id);
+        const x = mapX.get(id) || 0;
+        const y = mapY.get(id) || 0;
+        el.style.transform = `translate(${x}px, ${y}px)`;
+    }
+
+    // Apply container size
+    if (mapC.get(0).length > 0) {
+        const lastMain = mapC.get(0)[mapC.get(0).length - 1];
+        const containerH = mapY.get(lastMain) + (mapH.get(lastMain) + mapS.get(lastMain)) / 2;
+        domC.style.height = containerH + "px";
+    }
+    
+    // Aqui tem um problema: arrW só considera os nós secundários, logo se não há nós secundários, então o tamanho é 0
+    let maxW = 0;
+        for (const v of arrW) {
+            if (v > maxW) {
+                maxW = v;
+            }
+        }
+    domC.style.width = maxW + "px";
+    
+    // find lines and borders
+    function segPath(f, c, mode) {
+        
+        let x0, y0, x1, y1, c1x, c1y, c2x, c2y;
+        
+        y0 = -2 + mapY.get(f) + mapH.get(f);
+        y1 = -2 + mapY.get(c) + mapH.get(c);
+        
+        if (mode === "A") {
+            x0 = mapX.get(f) + mapW.get(f);
+            x1 = mapX.get(c);
+            c1x = x0 + varC;
+            c1y = y0;
+            c2x = x1 - varC;
+            c2y = y1;
+        } else {
+            x0 = mapX.get(f);
+            x1 = mapX.get(c) +mapW.get(c) -1;
+            c1x = x0 - varC;
+            c1y = y0;
+            c2x = x1 + varC;
+            c2y = y1;
+        }
+        return `M ${x0} ${y0} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x1} ${y1} `;
+    }
+    
+    const old = document.getElementById("lines");
+    if (old) old.remove();
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("id", "lines");
+    domC.appendChild(svg);
+    
+    for (let i = 0; i < mapC.get(0).length; i++) {
+        const m = mapC.get(0)[i];
+        const el = document.getElementById("n" + m);
+        const c = mapC.get(m);
+        el.style.borderBottomColor = "blue";
+        if (!c.length) continue;
+        for (let j = 0; j < c.length; j++) {
+            const sec = c[j];
+            const color = colors[j % colors.length]
+            let mode = "A";
+            if (varB) {
+                mode = mapR.get(m).includes(sec) ? "A" : "B";
+            }
+            let d = "";
+            
+            d += segPath(m, sec, mode);
+            
+            const q = [sec];
+            while (q.length) {
+                const u = q.pop();
+                const ch = mapC.get(u);
+                const elU = document.getElementById("n" + u);
+                elU.style.borderBottomColor = color;
+                if (!ch || ch.length === 0) continue;
+                for (let g = 0; g < ch.length; g++) {
+                    const v = ch[g];
+                    d += segPath(u, v, mode);
+                    q.push(v);
+                }
+            }
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute("d", d.trim());
+            path.setAttribute("fill", "none");
+            path.setAttribute("stroke", color);
+            path.setAttribute("stroke-width", "4");
+            path.setAttribute("vector-effect", "non-scaling-stroke");
+            svg.appendChild(path);
+        }
+    }
+}
+
+function updateTransform() {
+    domC.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+}
+
+function Align() {
+    const clozeEls = document.getElementsByClassName("cloze");
+    const vW = globalThis.innerWidth;
+    const vH = globalThis.innerHeight;
+    let cW;
+    let cH;
+    let cT;
+    let cL;
+    let id = null;
+    
+    for (let i = 0; i < clozeEls.length; i++) {
+        const el = clozeEls[i];
+        id = Number(el.parentElement.id.slice(1));
+        if (id) {
+            cW = el.offsetWidth;
+            cH = el.offsetHeight;
+            cT = el.offsetTop;
+            cL = el.offsetLeft;
+            break;
+        }
+    }
+    if (id) {
+        translateX = - mapX.get(id) + ( vW - cW) / 2 - cL;
+        translateY = - mapY.get(id) + ( vH - cH) / 2 - cT;
+        updateTransform();
+    }
+}
+
+function Add(id, type = "child") {
+  if (!mapF.has(id)) return;
+  const div = document.createElement("div");
+  varN++;
+  div.id = "n" + varN;
+  div.className = "n";
+  div.textContent = "sub";
+  div.contentEditable = "true";
+  if (type === "child") {
+      mapF.set(varN, id);
+      mapC.get(id).push(varN);
+      mapC.set(varN, []);
+  } else {
+      const father = mapF.get(id);
+      const siblings = mapC.get(father);
+      const index = siblings.indexOf(id);
+      mapF.set(varN, father);
+      if (type === "above") {
+          siblings.splice(index, 0, varN);
+          mapC.set(varN, []);
+      } else if (type === "below") {
+          siblings.splice(index + 1, 0, varN);
+          mapC.set(varN, []);
+      } else if (type === "father") {
+          mapF.set(id, varN);
+          siblings[index] = varN;
+          mapC.set(varN, [id]);
+      }
+  }
+  domC.appendChild(div);
+  Render();
+  div.focus();
+  window.getSelection().selectAllChildren(div);
+}
+
+function Delete(id, type = "all") {
+    const parentId = mapF.get(id);
+    const siblings = mapC.get(parentId);
+    const idx = siblings.indexOf(id);
+    if (type === "all") {
+        const queue = [id];
+        while (queue.length > 0) {
+            const current = queue.shift();
+            const el = document.getElementById(`n${current}`);
+            el.remove();
+            const c = mapC.get(current);
+            for (let i = 0; i < c.length; i++) {
+                queue.push(c[i]);
+            }
+            mapF.delete(current);
+            mapC.delete(current);
+        }
+        siblings.splice(idx, 1);
+    } else if (type === "collapse") {
+        const el = document.getElementById(`n${id}`);
+        el.remove();
+        const c = mapC.get(id);
+        siblings.splice(idx, 1, ...c);
+        for (let i = 0; i < c.length; i++) {
+            mapF.set(c[i], parentId);
+        }
+        mapF.delete(id);
+        mapC.delete(id);
+    }
+    Render();
+}
+
+function Move(id1, type = "up", id2) {
+    if (!mapF.has(id1)) return;
+    const f = mapF.get(id1);
+    const b = mapC.get(f); //brothers
+    const i = b.indexOf(id1);
+    if (type === "move") {
+        if (!mapF.has(id2)) return;
+        const q = [id1];
+        while (q.length) {
+            const id = q.shift();
+            if (id === id2) return;
+            q.push(...mapC.get(id));
+        }
+        b.splice(i, 1);
+        mapF.set(id1, id2);
+        mapC.get(id2).push(id1);
+    } else if (type === "up") {
+        b.splice(i, 1);
+        if (i === 0) {
+            b.push(id1);
+        } else {
+            b.splice(i - 1, 0, id1);
+        }
+    } else if (type === "down") {
+        b.splice(i, 1);
+        if (i === b.length) {
+            b.unshift(id1);
+        } else {
+            b.splice(i + 1, 0, id1);
+        }
+    }
+    Render();
+    document.getElementById("n" + id1).focus();
+}
+
+function Cloze(type) {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    if (!varCard) {
+        const clozeEls = document.getElementsByClassName("cloze");
+        if (clozeEls.length) {
+            const value = Number(clozeEls[0].dataset.ordinal);
+            varCard = value;
+            varCardMax = value;
+        }
+        const clozeInactiveEls = document.getElementsByClassName("cloze-inactive");
+        for (let i = 0; i < clozeInactiveEls.length; i++) {
+            const val = Number(clozeInactiveEls[i].dataset.ordinal);
+            if (val > varCardMax) {
+                varCardMax = val;
+            }
+        }
+    }
+    const range = sel.getRangeAt(0);
+    
+    if (range.collapsed) {
+        let node = range.startContainer;
+        while (node) {
+            if (node.nodeType === 3) {
+                node = node.parentElement;
+            }
+            if (node.nodeName.toLowerCase() === "div" || !node) {
+                node = null;
+                break;
+            }
+            if (node.nodeName.toLowerCase() === "span") {
+                break;
+            }
+            node = node.parentElement;
+        }
+        const text = document.createTextNode("\u200B")
+        if (node) {
+            // It's inside a <span>, so it breaks in half
+            const span = node;
+            const before = document.createRange();
+            before.setStart(span, 0);
+            before.setEnd(range.endContainer, range.endOffset);
+            const fragBefore = before.extractContents();
+            if (fragBefore.textContent) {
+                const clone = span.cloneNode(false);
+                clone.appendChild(fragBefore);
+                span.before(clone);
+                if (!span.textContent) {
+                    span.remove();
+                }
+                clone.after(text);
+            } else {
+                span.before(text);
+            }
+        } else {
+            const span = document.createElement("span");
+            span.className = "cloze";
+            span.appendChild(text);
+            if (type === "new") {
+                varCardMax++
+            }
+            span.dataset.ordinal = varCardMax;
+            range.insertNode(span);
+        }
+        sel.collapse(text, 1);
+    } else {
+        let content = range.extractContents();
+        const iterator = document.createNodeIterator(content, NodeFilter.SHOW_ELEMENT);
+        const spans = [];
+        let node;
+        while (node = iterator.nextNode()) {
+            if (node.nodeName.toLowerCase() === "span") {
+                spans.push(node);
+            }
+        }
+        for (let i = 0; i < spans.length; i++) {
+            const span = spans[i];
+            while (span.firstChild) {
+                span.before(span.firstChild);
+            }
+            span.remove();
+        }
+        if (spans.length) {
+            range.insertNode(content);
+        } else {
+            const span = document.createElement("span");
+            span.className = "cloze";
+            span.appendChild(content);
+            if (type === "new") {
+                varCardMax++
+            }
+            span.dataset.ordinal = varCardMax;
+            range.insertNode(span);
+        }
+        sel.removeAllRanges();
+    }
+}
+
+function InputMarkDown(id) {
+  if (!mapF.has(id)) return;
+  const parts = document.getElementById("n" + id).innerText.trim().split("\n");
+  const mapLI = new Map(); //Level id
+  mapLI.set(0, id);
+  for (let i = 0; i < parts.length; i++) {
+    const match = parts[i].match(/(#+|\t*-)\s*(.*)/s);
+    let level = match[1].length;
+    if (match[1][0] !== "#") {
+      level += 6;
+    }
+    varN++;
+    mapLI.set(level, varN);
+    const div = document.createElement("div");
+    div.id = "n" + varN;
+    div.className = "n";
+    div.textContent = match[2] ?? "Sub";
+    div.contentEditable = "true";
+    const f = mapLI.get(level -1);
+    mapF.set(varN, f);
+    mapC.get(f).push(varN);
+    mapC.set(varN, []);
+    domC.appendChild(div);
+  }
+  Delete(id, "collapse");
+  Render();
+}
+
+function OutputFront() {
+    const result = [];
+    const mapId = new Map();
+    mapId.set(0, 0);
+    let newId = 1;
+    const q = [...mapC.get(0)];
+    while (q.length) {
+        const oldId = q.shift();
+        mapId.set(oldId, newId);
+        const parentOld = mapF.get(oldId);
+        const parentNew = mapId.get(parentOld);
+        const el = document.getElementById("n" + oldId);
+        let text = el.innerHTML;
+        // Escapar @%
+        text = text.replace(/@/g, "@e");
+        // Substituir clozes com data-cloze
+        text = text.replace(/<span[^>]*data-cloze="([^"]*)"[^>]*data-ordinal="(\d+)"[^<]*<\/span>/g, (_, cloze, ord) => `{@%{c${ord}::${cloze}}@%}`);
+        // Substituir clozes sem data-cloze
+        text = text.replace(/<span[^>]*data-ordinal="(\d+)"[^>]*>(.*?)<\/span>/gs, (_, ord, cloze) => `{@%{c${ord}::${cloze}}@%}`);
+        // Escapar o {@%{ e }@%}
+        text = text.replace(/@%/g, "");
+        // Retornar caracteres HTML
+        text = text.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/<br>/g, "\n");
+        // Montar parte do resultado
+        result.push(parentNew ? `${text}@${parentNew}` : `${text}@`);
+        const c = mapC.get(oldId);
+        for (let j = 0; j < c.length; j++) {
+            q.push(c[j]);
+        }
+        newId++
+    }
+    const final = result.join("%") + `%${varB}`;
+    // Copiar para área de transferência
+    navigator.clipboard.writeText(final);
+}
+
+Background();
+InputFront();
+requestAnimationFrame(() => {
+    Render();
+    Align();
+});
+
+let varP1 = null; // id of the first pointer
+let varP2 = null; // id of the second pointer
+let varPN = 0; // Number of pointers
+let varD0 = null; // last distance
+let varX0 = null; // last X of the pan
+let varY0 = null; // last Y of the pan
+let varX1 = null; // current x of the first
+let varY1 = null; // current Y of the first
+let varX2 = null; // current x of the second
+let varY2 = null; // current Y of the second
+let unlocked = true;
+
+document.addEventListener("pointerdown", (e) => {
+    if (!varP1) {
+        varP1 = e.pointerId;
+        varX1 = e.clientX;
+        varY1 = e.clientY;
+        varPN++;
+        varX0 = null;
+        varY0 = null;
+    } else if (!varP2) {
+        varP2 = e.pointerId;
+        varX2 = e.clientX;
+        varY2 = e.clientY;
+        varPN++;
+        varX0 = null;
+        varY0 = null;
+    }
+}, { passive: true});
+
+// Do not allow focusing the menu
+domM.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+}, { passive: false, capture: true });
+
+// Artificial pan and zoom
+document.addEventListener("pointermove", (e) => {
+    e.preventDefault();
+    if (e.pointerId === varP1) {
+        varX1 = e.clientX;
+        varY1 = e.clientY;
+    } else if (e.pointerId === varP2) {
+        varX2 = e.clientX;
+        varY2 = e.clientY;
+    }
+    if (unlocked) {
+        unlocked = false;
+        requestAnimationFrame(() => {
+            // Pan
+            const centerX = (varX1 + varX2) / varPN;
+            const centerY = (varY1 + varY2) / varPN;
+            if (varX0) {
+                const dx0 = centerX - varX0;
+                const dy0 = centerY - varY0;
+                translateX += dx0;
+                translateY += dy0;
+            }
+            varX0 = centerX;
+            varY0 = centerY;
+            // Zoom
+            if (varP1 && varP2) {
+                const dx = varX1 - varX2;
+                const dy = varY1 - varY2;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (varD0) {
+                    const newScale = Math.max(scale * distance / varD0, 0.04);
+                    // compensation to keep the point fixed
+                    translateX = centerX - (centerX - translateX) * (newScale / scale);
+                    translateY = centerY - (centerY - translateY) * (newScale / scale);
+                    scale = newScale;
+                }
+                varD0 = distance;
+            }
+            updateTransform();
+            unlocked = true;
+        });
+    }
+}, { passive: false });
+
+function pointerRelease(e) {
+    varD0 = null;
+    varX0 = null;
+    varY0 = null;
+    if (e.pointerId === varP1) {
+        varP1 = null;
+        varX1 = null;
+        varY1 = null;
+        varPN--;
+    } else if (e.pointerId === varP2) {
+        varP2 = null;
+        varX2 = null;
+        varY2 = null;
+        varPN--;
+    }
+}
+
+document.addEventListener("pointerup", pointerRelease, { passive: true });
+document.addEventListener("pointercancel", pointerRelease, { passive: true });
+
+// fix div enter
+domC.addEventListener("beforeinput", (e) => {
+    if (e.inputType === "insertParagraph") {
+        e.preventDefault(); 
+        //This is old, but I have a plan B.
+        document.execCommand("insertLineBreak");
+    }
+}, { passive: false });
+domC.addEventListener("focusin", (e) => {
+    if (e.target.className === "n") {
+        domM.style.display = "initial";
+        e.target.style.zIndex = 1;
+        varLF = varF;
+        varF = Number(e.target.id.slice(1));
+    }
+}, { passive: true });
+domC.addEventListener("focusout", (e) => {
+    if (e.target.className === "n") {
+        domM.style.display = "none";
+        e.target.style.zIndex = "auto";
+        if (e.target.textContent === "") {
+            const id = Number(e.target.id.slice(1));
+            Delete(id);
+        } else {
+            Render();
+        }
+    }
+}, { passive: true });
+
+// Convert automatic scroll from focus into translate
+domS.addEventListener("scroll", (e) => {
+    translateX -= domS.scrollLeft;
+    translateY -= domS.scrollTop;
+    updateTransform();
+    domS.scrollLeft = 0;
+    domS.scrollTop = 0;
+}, { passive: true });
+</script>
+</body>
+</html>

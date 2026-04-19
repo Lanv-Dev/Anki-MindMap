@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title></title>
+</head>
+
+<body>
+  <script id="script1">
+  function Inject() {
+    const script1 = document.getElementById("script1");
+    const script2 = document.getElementById("script2");
+    if (script1 && !script2) {
+      const novoScript = document.createElement("script");
+      novoScript.id = "script2";
+      novoScript.textContent = script1.textContent;
+      document.body.appendChild(novoScript);
+    }
+  }
+  </script>
+</body>
+
+</html>

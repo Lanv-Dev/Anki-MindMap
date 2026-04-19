@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <meta charset="UTF-8">
+   <style>
+      #s {
+         position: absolute;
+      }
+   </style>
+</head>
+
+<body>
+   <div id="s"contenteditable="true">texto</div>
+</body>
+
+<script>
+document.addEventListener('keydown', function(event) {
+   // Só identifica tecla backspace e enter
+    console.log('Tecla:', event.key);
+    }
+);
+</script>
+
+</html>

@@ -1,0 +1,125 @@
+<html>
+  <head>
+    <style>
+      .cloze {
+        color: blue;
+      }
+    </style>
+  </head>
+<body>
+  <button onclick="See()">See</button>
+  <button onclick="Cloze('new')">New</button>
+  <button onclick="Cloze()">current</button>
+  <div id="o"contentEditable="true"></div>
+  <div id="d">text</div>
+<script>
+let varCard = 1;
+let varCardMax = 1;
+
+function See() {
+  const origem = document.getElementById("o");
+  const destino = document.getElementById("d");
+  const htmlDaOrigem = origem.innerHTML;
+  destino.textContent = htmlDaOrigem;
+}
+
+function Cloze(type) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  if (!varCard) {
+    const clozeEls = document.getElementsByClassName("cloze");
+    if (clozeEls.length) {
+      const value = Number(clozeEls[0].dataset.ordinal);
+      varCard = value;
+      varCardMax = value;
+    }
+    const clozeInactiveEls = document.getElementsByClassName("cloze-inactive");
+    for (let i = 0; i < clozeInactiveEls.length; i++) {
+      const val = Number(clozeInactiveEls[i].dataset.ordinal);
+      if (val > varCardMax) {
+        varCardMax = val;
+      }
+    }
+  }
+  const range = sel.getRangeAt(0);
+  
+  if (range.collapsed) {
+    let node = range.startContainer;
+    while (node) {
+      if (node.nodeType === 3) {
+        node = node.parentElement;
+      }
+      if (node.nodeName.toLowerCase() === "div" || !node) {
+        node = null;
+        break;
+      }
+      if (node.nodeName.toLowerCase() === "span") {
+        break;
+      }
+      node = node.parentElement;
+    }
+    const text = document.createTextNode("\u200B")
+    if (node) {
+      // It's inside a <span>, so it breaks in half
+      const span = node;
+      const before = document.createRange();
+      before.setStart(span, 0);
+      before.setEnd(range.endContainer, range.endOffset);
+      const fragBefore = before.extractContents();
+      if (fragBefore.textContent) {
+        const clone = span.cloneNode(false);
+        clone.appendChild(fragBefore);
+        span.before(clone);
+        if (!span.textContent) {
+          span.remove();
+        }
+        clone.after(text);
+      } else {
+        span.before(text);
+      }
+    } else {
+      const span = document.createElement("span");
+      span.className = "cloze";
+      span.appendChild(text);
+      if (type === "new") {
+        varCardMax++
+      }
+      span.dataset.ordinal = varCardMax;
+      range.insertNode(span);
+    }
+    sel.collapse(text, 1);
+  } else {
+    let content = range.extractContents();
+    const iterator = document.createNodeIterator(content, NodeFilter.SHOW_ELEMENT);
+    const spans = [];
+    let node;
+    while (node = iterator.nextNode()) {
+      if (node.nodeName.toLowerCase() === "span") {
+        spans.push(node);
+      }
+    }
+    for (let i = 0; i < spans.length; i++) {
+      const span = spans[i];
+      while (span.firstChild) {
+        span.before(span.firstChild);
+      }
+      span.remove();
+    }
+    if (spans.length) {
+      range.insertNode(content);
+    } else {
+      const span = document.createElement("span");
+      span.className = "cloze";
+      span.appendChild(content);
+      if (type === "new") {
+        varCardMax++
+      }
+      span.dataset.ordinal = varCardMax;
+      range.insertNode(span);
+    }
+    sel.removeAllRanges();
+  }
+}
+</script>
+</body>
+</html>
